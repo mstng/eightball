@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="問いを胸に球をふると、7人の占い師の口調でお告げが浮かぶ、令和版マジック8ボール。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="八球オラクル ｜ 令和版マジック8ボール">
+<meta property="og:description" content="問いを一つ、胸に。球をふれば、盤面が答えを返す。">
+<meta name="twitter:card" content="summary">
+<title>八球オラクル ｜ 令和版マジック8ボール</title>
+
+<style>
+  /* ===== デザイントークン（宇宙×神託。意図的にダーク単一世界） ===== */
+  :root{
+    --ground:   #0b0d26;   /* 地：墨紺の宇宙 */
+    --ground-2: #141743;   /* パネル */
+    --oracle:   #7b6cf6;   /* 神託の光：アメジスト */
+    --glow:     #a89bff;   /* 光の暈（ハロー） */
+    --ember:    #e8a04a;   /* 吉：琥珀 */
+    --frost:    #6fd6e0;   /* 保留：氷 */
+    --dusk:     #d16f9a;   /* 凶：黄昏 */
+    --moon:     #eef0ff;   /* 文字：月光銀 */
+    --moon-dim: #9aa0c8;   /* 弱い文字（紫みのある中間色） */
+    --line:     rgba(168,155,255,.16);
+    /* 書体：お告げ＝明朝、UI＝ゴシック（占いの手触りを型で出す） */
+    --serif: "Hiragino Mincho ProN","Yu Mincho",YuMincho,"Noto Serif JP",serif;
+    --sans:  "Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    font-family:var(--sans);
+    color:var(--moon);
+    background:
+      radial-gradient(120% 90% at 50% -10%, #1c2064 0%, rgba(28,32,100,0) 55%),
+      radial-gradient(90% 70% at 50% 120%, #2a1a4d 0%, rgba(42,26,77,0) 60%),
+      var(--ground);
+    min-height:100%;
+    overflow-x:hidden;
+  }
+
+  /* 背景の星屑 */
+  #stars{ position:fixed; inset:0; z-index:0; display:block; }
+  /* 紙吹雪（吉のときだけ）。クリックは透過 */
+  #confetti{ position:fixed; inset:0; z-index:5; display:block; pointer-events:none; }
+  /* 音のオン／オフ */
+  .mute{
+    position:fixed; top:14px; right:14px; z-index:6;
+    width:40px; height:40px; border-radius:50%;
+    border:1px solid var(--line); background:var(--ground-2); color:var(--moon);
+    font-size:16px; cursor:pointer; line-height:1;
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .mute:hover{ border-color:var(--oracle); }
+  .mute:focus-visible{ outline:3px solid var(--glow); outline-offset:3px; }
+  .mute[aria-pressed="true"]{ color:var(--moon-dim); }
+
+  .wrap{
+    position:relative; z-index:1;
+    max-width:640px; margin:0 auto;
+    padding:clamp(28px,6vw,56px) 22px 64px;
+    display:flex; flex-direction:column; align-items:center; gap:26px;
+    text-align:center;
+  }
+
+  /* ===== ヘッダー ===== */
+  .eyebrow{
+    font-size:12px; letter-spacing:.42em; text-transform:uppercase;
+    color:var(--oracle); font-weight:600; padding-left:.42em;
+  }
+  h1{
+    font-family:var(--serif); font-weight:600;
+    font-size:clamp(30px,7vw,46px); line-height:1.15; margin:.35em 0 0;
+    text-wrap:balance; letter-spacing:.04em;
+  }
+  .lede{ color:var(--moon-dim); font-size:14px; margin:0; max-width:34ch; line-height:1.7; }
+
+  /* ===== 球（ステージの主役） ===== */
+  .stage{ position:relative; width:min(280px,72vw); aspect-ratio:1; margin:6px 0 2px; }
+  .halo{
+    position:absolute; inset:-14%; border-radius:50%;
+    background:radial-gradient(circle at 50% 42%, var(--oracle) 0%, rgba(123,108,246,0) 62%);
+    filter:blur(6px); opacity:.5; z-index:0;
+    transition:opacity .6s ease;
+  }
+  .orb{
+    position:absolute; inset:0; border-radius:50%; z-index:1;
+    background:
+      radial-gradient(circle at 34% 30%, #3a3f7a 0%, #14163a 46%, #05060f 100%);
+    box-shadow:
+      inset 0 -22px 50px rgba(0,0,0,.75),
+      inset 0 12px 32px rgba(168,155,255,.22),
+      0 30px 70px rgba(0,0,0,.55);
+    display:grid; place-items:center;
+    cursor:pointer; user-select:none;
+    transition:transform .2s ease;
+  }
+  .orb:focus-visible{ outline:3px solid var(--glow); outline-offset:6px; }
+  /* 上部のハイライト（つや） */
+  .orb::before{
+    content:""; position:absolute; top:12%; left:20%; width:42%; height:30%;
+    background:radial-gradient(circle at 40% 40%, rgba(255,255,255,.5), rgba(255,255,255,0) 70%);
+    border-radius:50%; filter:blur(3px); pointer-events:none;
+  }
+  /* 三角窓（お告げが浮かぶ場所） */
+  .window{
+    position:relative; z-index:2;
+    width:64%; aspect-ratio:1; display:grid; place-items:center;
+    clip-path:polygon(50% 8%, 92% 86%, 8% 86%);
+    background:
+      radial-gradient(circle at 50% 62%, #2b2f68 0%, #101235 70%, #0a0b22 100%);
+    box-shadow:inset 0 0 26px rgba(123,108,246,.5);
+  }
+  .window .glyph{
+    font-family:var(--serif); font-size:clamp(30px,9vw,46px);
+    color:var(--glow); transform:translateY(14%);
+    transition:opacity .35s ease, transform .35s ease;
+    text-shadow:0 0 18px rgba(168,155,255,.7);
+  }
+  .window .glyph.dim{ opacity:.32; }
+
+  /* 揺れアニメ（球を“ふる”） */
+  @keyframes shake{
+    0%,100%{ transform:translate(0,0) rotate(0); }
+    15%{ transform:translate(-9px,4px) rotate(-4deg); }
+    30%{ transform:translate(8px,-5px) rotate(3deg); }
+    45%{ transform:translate(-7px,-3px) rotate(-3deg); }
+    60%{ transform:translate(6px,5px) rotate(4deg); }
+    80%{ transform:translate(-4px,2px) rotate(-2deg); }
+  }
+  .orb.shaking{ animation:shake .82s cubic-bezier(.36,.07,.19,.97); }
+
+  /* ===== 占い師を選ぶ（キャラチップ） ===== */
+  .cast-label{
+    font-size:11px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--moon-dim); font-weight:600; margin:0 0 2px;
+  }
+  .cast{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  .chip{
+    border:1px solid var(--line); background:var(--ground-2); color:var(--moon-dim);
+    font-family:var(--sans); font-size:13px; cursor:pointer;
+    padding:8px 14px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
+  }
+  .chip:hover{ color:var(--moon); border-color:var(--oracle); }
+  .chip:focus-visible{ outline:3px solid var(--glow); outline-offset:3px; }
+  .chip[aria-pressed="true"]{ color:var(--moon); border-color:var(--oracle); background:rgba(123,108,246,.16); }
+  .chip .em{ font-size:15px; }
+  .by{ display:block; text-align:right; font-size:12px; color:var(--moon-dim); margin-top:14px; font-family:var(--serif); letter-spacing:.06em; }
+
+  /* ===== 入力・ボタン ===== */
+  .ask{ width:100%; display:flex; flex-direction:column; gap:12px; align-items:center; }
+  .field{
+    width:100%; max-width:420px;
+    display:flex; align-items:center; gap:10px;
+    background:var(--ground-2); border:1px solid var(--line);
+    border-radius:14px; padding:4px 6px 4px 16px;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .field:focus-within{ border-color:var(--oracle); box-shadow:0 0 0 4px rgba(123,108,246,.16); }
+  .field input{
+    flex:1; background:transparent; border:0; outline:0;
+    color:var(--moon); font-family:var(--sans); font-size:15px; padding:12px 0;
+  }
+  .field input::placeholder{ color:var(--moon-dim); }
+  .shake-btn{
+    border:0; cursor:pointer; white-space:nowrap;
+    font-family:var(--sans); font-weight:700; font-size:14px; letter-spacing:.06em;
+    color:#0b0d26; background:linear-gradient(180deg,var(--glow),var(--oracle));
+    padding:12px 20px; border-radius:11px;
+    box-shadow:0 8px 22px rgba(123,108,246,.4);
+    transition:transform .15s ease, box-shadow .15s ease, opacity .2s ease;
+  }
+  .shake-btn:hover{ transform:translateY(-1px); box-shadow:0 12px 26px rgba(123,108,246,.5); }
+  .shake-btn:active{ transform:translateY(0); }
+  .shake-btn:disabled{ opacity:.5; cursor:progress; }
+  .hint{ font-size:12px; color:var(--moon-dim); }
+
+  /* ===== お告げカード ===== */
+  .verdict{
+    width:100%; max-width:480px;
+    background:linear-gradient(180deg, rgba(30,34,80,.7), rgba(16,18,52,.7));
+    border:1px solid var(--line); border-radius:18px;
+    padding:24px 22px; margin-top:4px;
+    opacity:0; transform:translateY(10px);
+    transition:opacity .5s ease, transform .5s ease;
+    backdrop-filter:blur(4px);
+  }
+  .verdict.show{ opacity:1; transform:translateY(0); }
+  .tag{
+    display:inline-block; font-family:var(--serif); font-size:22px; font-weight:600;
+    letter-spacing:.18em; padding:2px 4px 2px 18px; border-radius:2px;
+    position:relative;
+  }
+  .tag::before{ content:""; position:absolute; left:0; top:12%; bottom:12%; width:4px; border-radius:2px; background:var(--tone,var(--oracle)); }
+  .oracle-text{
+    font-family:var(--serif); font-size:17px; line-height:2.05; margin:16px 0 0;
+    text-wrap:pretty; color:var(--moon);
+  }
+  .oracle-text .kw{ color:var(--glow); }
+  .card-foot{ display:flex; gap:10px; justify-content:center; margin-top:20px; flex-wrap:wrap; }
+  .ghost-btn{
+    border:1px solid var(--line); background:transparent; color:var(--moon-dim);
+    font-family:var(--sans); font-size:13px; cursor:pointer;
+    padding:9px 16px; border-radius:10px;
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
+  }
+  .ghost-btn:hover{ color:var(--moon); border-color:var(--oracle); background:rgba(123,108,246,.1); }
+
+  /* ===== これまでのお告げ ===== */
+  .log{ width:100%; max-width:480px; margin-top:8px; text-align:left; }
+  .log h2{
+    font-size:11px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--moon-dim); font-weight:600; margin:0 0 10px; padding-left:.3em;
+  }
+  .log ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .log li{
+    display:flex; align-items:baseline; gap:12px;
+    font-size:13px; color:var(--moon-dim); padding:8px 12px;
+    background:rgba(20,23,67,.5); border:1px solid var(--line); border-radius:10px;
+  }
+  .log li .lt{ font-family:var(--serif); color:var(--glow); font-size:14px; white-space:nowrap; }
+  .log li .lq{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  footer{ color:var(--moon-dim); font-size:11px; margin-top:12px; line-height:1.8; }
+
+  @media (prefers-reduced-motion: reduce){
+    .orb.shaking{ animation:none; }
+    .verdict{ transition:opacity .2s ease; transform:none; }
+    .verdict.show{ transform:none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<canvas id="confetti"></canvas>
+<button id="mute" class="mute" type="button" aria-pressed="false" title="音のオン／オフ">🔊</button>
+
+<main class="wrap">
+  <div>
+    <div class="eyebrow">Reiwa Oracle</div>
+    <h1>八球オラクル</h1>
+  </div>
+  <p class="lede">問いを一つ、胸に。<br>球をふれば、盤面が答えを返す。</p>
+
+  <div class="stage">
+    <div class="halo" id="halo"></div>
+    <button class="orb" id="orb" aria-label="球をふってお告げを聞く">
+      <div class="window"><span class="glyph dim" id="glyph">８</span></div>
+    </button>
+  </div>
+
+  <div class="ask">
+    <p class="cast-label">占い師を選ぶ</p>
+    <div class="cast" id="cast" role="group" aria-label="占い師を選ぶ"></div>
+  </div>
+
+  <form class="ask" id="ask">
+    <div class="field">
+      <input id="q" type="text" maxlength="60" autocomplete="off"
+             placeholder="例：この転職、進めるべき？" aria-label="問いを入力">
+      <button class="shake-btn" id="shake" type="submit">この球を、ふる</button>
+    </div>
+    <p class="hint">はい／いいえで迷っていることを訊くと、よく効く。</p>
+  </form>
+
+  <section class="verdict" id="verdict" aria-live="polite">
+    <span class="tag" id="tag">―</span>
+    <p class="oracle-text" id="text"></p>
+    <span class="by" id="by"></span>
+    <div class="card-foot">
+      <button class="ghost-btn" id="copy" type="button">お告げをコピー</button>
+      <button class="ghost-btn" id="again" type="button">もう一度ふる</button>
+    </div>
+  </section>
+
+  <section class="log" id="logWrap" hidden>
+    <h2>これまでのお告げ</h2>
+    <ul id="log"></ul>
+  </section>
+
+  <footer>Phase1：バックエンドなしの“AI風”回答エンジン（本物のAI版は後日）<br>© 令和版マジック8ボール</footer>
+</main>
+
+<script>
+/* =========================================================================
+   “AI風”回答エンジン
+   ─ 心理3段構造を仕込む：
+     ① バーナム効果 … 誰にでも当てはまる“見透かし”の一文
+     ② 核心 … 入力された問いの語を拾って echo（自分ごと化）
+     ③ ちょい毒／意外 … 全肯定にしないオチ
+   ========================================================================= */
+
+/* 吉凶（おみくじ風）。weight で出現率を調整。tone で色とトーンを分岐 */
+const VERDICTS = [
+  { tag:"大吉", tone:"good", weight:2, color:"var(--ember)" },
+  { tag:"吉",   tone:"good", weight:4, color:"var(--ember)" },
+  { tag:"半吉", tone:"good", weight:3, color:"var(--ember)" },
+  { tag:"保留", tone:"hold", weight:4, color:"var(--frost)" },
+  { tag:"小凶", tone:"bad",  weight:3, color:"var(--dusk)"  },
+  { tag:"凶",   tone:"bad",  weight:2, color:"var(--dusk)"  },
+];
+
+/* トーン別の実カラー（球の発色・タグ・紙吹雪で使う。CSS変数ではなく実hexで持つ） */
+const TONE_HEX = { good:"#e8a04a", hold:"#6fd6e0", bad:"#d16f9a" };
+
+/* 占い師キャラ。それぞれが独自の口調で ①バーナム ②核心 ③ちょい毒 のプールを持つ。
+   → キャラを変えると声色がガラッと変わり、同時に文章の総量も増える（飽きにくくなる）。 */
+const CHARACTERS = {
+  /* ===== 老賢者：荘厳・神託調（デフォルト） ===== */
+  sage:{
+    name:"老賢者", em:"🔮", sign:"― 老賢者より",
+    barnum:[
+      "あなたは表では平気なふりをして、内心ずっとこれを気にしているね。",
+      "本当は答えをもう半分わかっている。ただ背中を押されたいだけだ。",
+      "周りには相談しづらくて、一人で抱えていたことだろう。",
+      "最近、同じ問いが何度も頭をよぎっていたはずだ。",
+    ],
+    core:{
+      good:[ "「${q}」── 盤は、前へ進めと告げている。","「${q}」── その答えは、思っているより近い。","「${q}」── 星の並びは、あなたに味方している。","「${q}」── 迷いは晴れる。手を伸ばしていい。" ],
+      hold:[ "「${q}」── 今は“決めない”ことが、最良の一手だ。","「${q}」── 答えはまだ霧の向こう。急がなくていい。","「${q}」── 盤面はまだ揺れている。機は熟していない。","「${q}」── もう一つ、材料が足りていないようだ。" ],
+      bad:[  "「${q}」── 急げば、たぶん転ぶ。いまは逆風だ。","「${q}」── その道は、盤の底がわずかに濁っている。","「${q}」── 選び方を変えなければ、同じ壁にぶつかる。","「${q}」── 一度、立ち止まったほうがいい。" ],
+    },
+    twist:{
+      good:[ "ただし動くのは“今週”のうちに。運は待ってくれない。","一つだけ。焦って選ぶと、その運はするりと逃げる。","追い風のときこそ、隣にいる人へ礼を欠くな。" ],
+      hold:[ "三日後、もう一度この球を振るといい。景色が変わっている。","答えを急かす相手ほど、あなたの味方ではない。","“わからない”を選べるのも、実力のうちだ。" ],
+      bad:[  "だが凶は、備えた者には牙をむかない。今から手を打て。","転ぶ前提で動けば、その転びは糧になる。","止まるのは負けじゃない。次の一手のための溜めだ。" ],
+    },
+  },
+
+  /* ===== ギャル占い師：カジュアル・ハイテンション ===== */
+  gal:{
+    name:"ギャル占い師", em:"💅", sign:"― ギャル占い師より",
+    barnum:[
+      "てかあんた、平気なフリしてるけど内心めっちゃ気にしてるっしょ？",
+      "ぶっちゃけもう答え出てるよね？背中押してほしいだけっしょ〜。",
+      "この件、最近ずっと頭ん中グルグルしてたでしょ。わかるわかる。",
+      "ひとりで抱え込むタイプでしょ？もう吐き出しちゃいな〜。",
+    ],
+    core:{
+      good:[ "「${q}」── これはガチでGOでしょ！盤面ノリノリだって。","「${q}」── いける、てか答えもう目の前じゃん。","「${q}」── 星たちフルであんたの味方してるわ〜。","「${q}」── 迷う理由なくない？手ぇ伸ばしな。" ],
+      hold:[ "「${q}」── いまはまだ“保留”が正解。焦んないで。","「${q}」── うーん、まだモヤってる。タイミング待ちだね。","「${q}」── 材料足りてないわ、もうちょい情報集めよ。","「${q}」── 今日決めなくてよくない？寝かせよ。" ],
+      bad:[  "「${q}」── 今つっこむのはやめときな、たぶんコケる。","「${q}」── 正直いま逆風ビュービューだわ。","「${q}」── いったんストップ！このままだと同じ壁ドンよ。","「${q}」── 一回落ち着こ、ね？" ],
+    },
+    twist:{
+      good:[ "でも動くなら今週ね、モタモタしてると運逃げるよ〜。","浮かれて雑になったら一発で台無しだから、そこだけ注意ね。","調子いいときこそ周りにありがと言っときな、マジで。" ],
+      hold:[ "3日後もっかい振ってみ、景色ぜんぜん変わってるから。","急かしてくる奴、だいたい味方じゃないから無視でヨシ。","“わからん”って言える人、普通に強いから安心して。" ],
+      bad:[  "でも備えてれば凶なんて怖くないって、今から手打とっ。","止まるの負けじゃないから。溜めてるだけ、溜め。","コケる前提で動けば、それただの経験値だからね。" ],
+    },
+  },
+
+  /* ===== 毒舌占い師：辛口・皮肉 ===== */
+  dark:{
+    name:"毒舌占い師", em:"🖤", sign:"― 毒舌占い師より",
+    barnum:[
+      "平気な顔してるけど、どうせ内心ずっと引きずってるんでしょ。お見通し。",
+      "答えなんてとっくに出てる。誰かに肯定してほしいだけ。図星？",
+      "また同じこと考えてるの？その問い、何周目かしら。",
+      "自分では決められない。だからここに来た。違う？",
+    ],
+    core:{
+      good:[ "「${q}」── 珍しく、進めていいわ。盤面が味方してる。","「${q}」── 悪くない。答えは意外とすぐそこよ。","「${q}」── ふん、星の並びはあんたに甘いみたいね。","「${q}」── たまには自分を信じてみなさい。" ],
+      hold:[ "「${q}」── 今決めるのは悪手。少しは我慢なさい。","「${q}」── まだ霧の中。急ぐ理由、あるの？","「${q}」── 材料不足。その状態で決めるの、ただの博打よ。","「${q}」── 焦り、顔に出てるわよ。" ],
+      bad:[  "「${q}」── やめときなさい。今動いたら順当に転ぶわ。","「${q}」── 逆風。行くなら止めないけど、知らないわよ。","「${q}」── 同じ壁に何回ぶつかれば気が済むの？","「${q}」── その選択、もう答え見えてるでしょ。" ],
+    },
+    twist:{
+      good:[ "ただし今週中にね。グズグズしてるうちに運は他所へ行くわよ。","調子に乗った瞬間に足元すくわれる。せいぜい気をつけて。","うまくいったら、支えてる人に礼くらい言いなさいよ。" ],
+      hold:[ "3日後にまた来なさい。少しはマシな顔になってるでしょ。","急かしてくる相手ほど、あんたの得なんて考えてない。","“わからない”と言える潔さだけは、認めてあげる。" ],
+      bad:[  "まあ、備えてる人間に凶は刺さらない。今から動けば？","止まるのは負けじゃない。負けなのは、学ばないこと。","転びなさい。そこでやっと少しは学ぶでしょうから。" ],
+    },
+  },
+
+  /* ===== やさしい母：温かい・受容 ===== */
+  mother:{
+    name:"やさしい母", em:"🌷", sign:"― やさしい母より",
+    barnum:[
+      "平気なふりをして、本当はずっと気になっていたのね。よくがんばってる。",
+      "答えはもう心の中にあるのよ。あとは少し勇気がいるだけ。",
+      "ひとりで抱えていたのね。ここでは大丈夫よ。",
+      "考えすぎてしまう、やさしい子なのね。",
+    ],
+    core:{
+      good:[ "「${q}」── 大丈夫、前に進んでいいのよ。","「${q}」── その答えは、あなたが思うよりずっと近くにあるわ。","「${q}」── 星も、ちゃんとあなたの味方をしているの。","「${q}」── 自分を信じて、手を伸ばしてごらんなさい。" ],
+      hold:[ "「${q}」── 今はまだ、決めなくていいのよ。ゆっくりで。","「${q}」── 答えは霧の向こう。焦らなくて大丈夫。","「${q}」── もう少しだけ、待ってみましょうか。","「${q}」── 迷うのは、真剣な証よ。" ],
+      bad:[  "「${q}」── 今は少し、立ち止まったほうがいいみたい。","「${q}」── 風向きが逆なだけ。あなたのせいじゃないのよ。","「${q}」── 急がないで。ここで一度、深呼吸を。","「${q}」── 無理をしないでね。" ],
+    },
+    twist:{
+      good:[ "でも、動くなら今週のうちにね。そっと背中を押しておくわ。","うまくいっても、支えてくれる人を忘れないでね。","焦らずいけば、きっと大丈夫。見守ってるから。" ],
+      hold:[ "三日経ったら、また球を振ってごらんなさい。","急かす人の声より、自分の心の声を聞いてね。","“わからない”でいいの。それも立派な答えよ。" ],
+      bad:[  "でも大丈夫、備えていれば怖くないの。一緒に手を打ちましょう。","止まるのは負けじゃないのよ。休むのも大事。","つまずいても、そこから学べる子だって、知ってるわ。" ],
+    },
+  },
+
+  /* ===== 関西の商売人：損得・相場でしゃべる ===== */
+  kansai:{
+    name:"関西の商売人", em:"💴", sign:"― 関西の商売人より",
+    barnum:[
+      "あんた、平気な顔しとるけど、ほんまは気になって夜も寝られへんのやろ？",
+      "答えはもう出とるやん。誰かにええよって言うてほしいだけやろ？",
+      "その悩み、最近ずーっと頭から離れへんかったんちゃう？",
+      "ひとりで抱えとったんやな。しんどかったやろ。",
+    ],
+    core:{
+      good:[ "「${q}」── これは買いや！盤面、完全に乗っとるで。","「${q}」── 答え、もう目の前やん。行っとき。","「${q}」── 星もあんたに味方しとる。これは儲けもんや。","「${q}」── 迷うだけ損やで、手ぇ出しとき。" ],
+      hold:[ "「${q}」── いまは“待ち”が正解や。焦って買うたらあかん。","「${q}」── まだ相場が読めん。もうちょい様子見や。","「${q}」── 材料不足や。情報集めてからでも遅ないで。","「${q}」── 今日は決めんでええ。寝かしとき。" ],
+      bad:[  "「${q}」── これはやめとき。今動いたら損するで。","「${q}」── 逆風や。行くんは止めへんけど、儲からんで。","「${q}」── 同じ手で何回コケる気や。やり方変えなあかん。","「${q}」── 一回、財布閉じとこ。" ],
+    },
+    twist:{
+      good:[ "せやけど動くなら今週中やで。モタモタしとったら他の奴に取られるわ。","調子ええときほど気ぃ引き締めや。足元すくわれるで。","儲かったら、世話になった人に一杯おごりや。それが商売の礼儀や。" ],
+      hold:[ "三日したらまた振りにおいで。相場変わっとるはずや。","急かしてくる奴は、たいてい自分の得しか考えてへん。気ぃつけや。","“わからん”言えるのも才能や。無理に張らんでええ。" ],
+      bad:[  "まあ備えとったら凶も怖ないわ。今から手ぇ打っとき。","止まるんは負けちゃう。損切りも立派な戦略やで。","コケた分は勉強代や。次に活かしたらチャラや。" ],
+    },
+  },
+
+  /* ===== 闇の眷属：中二病・厨二語調 ===== */
+  chuni:{
+    name:"闇の眷属", em:"⚔️", sign:"― 深淵より囁く者",
+    barnum:[
+      "貴様……平静を装っているが、その魂の奥底は疾うに揺らいでいるな。",
+      "答えなど、貴様の血はとうに識っている。ただ“契約”を求めているだけだ。",
+      "その問い……幾度も貴様の意識を蝕んできたであろう。",
+      "孤独に抱え込む定めか。哀れな……だが、嫌いではない。",
+    ],
+    core:{
+      good:[ "「${q}」── 進め。運命の歯車は、いま貴様に噛み合っている。","「${q}」── 答えは、思うより近き闇に潜んでいる。掴め。","「${q}」── 星辰の配列が、貴様への加護を示している。","「${q}」── 迷いを断て。その手に、選ぶ資格が宿っている。" ],
+      hold:[ "「${q}」── 今は動くな。“静”こそ最強の一手となる。","「${q}」── 答えは霧の帳の向こう。刻はまだ満ちていない。","「${q}」── 盤面は未だ混沌。運命が定まっておらぬ。","「${q}」── 力が足りぬ。今しばし、闇の中で研げ。" ],
+      bad:[  "「${q}」── 止まれ。今動けば、貴様は奈落へ堕ちる。","「${q}」── 逆巻く風……その道は禍を孕んでいる。","「${q}」── 同じ結界に幾度囚われる。理を変えねば終わらぬ。","「${q}」── 一度、その刃を鞘に収めよ。" ],
+    },
+    twist:{
+      good:[ "だが猶予は“七日”。運命の門は、いつまでも開いてはいない。","慢心は最大の敵。栄光の刹那にこそ、深淵は口を開く。","力を得しときこそ、背を預けし者への礼を忘れるな。" ],
+      hold:[ "三たび陽が沈みしのち、再びこの珠を振るがいい。","貴様を急かす者……その多くは、貴様の敵だ。","“識らぬ”と認める強さ。それもまた、選ばれし者の証。" ],
+      bad:[  "だが……備えし者に、凶の呪いは届かぬ。今こそ動け。","退くは敗北にあらず。次なる一撃のための“溜め”よ。","堕ちよ。その痛みだけが、貴様を覚醒へと導く。" ],
+    },
+  },
+
+  /* ===== AI執事：慇懃・丁寧語 ===== */
+  butler:{
+    name:"AI執事", em:"🎩", sign:"― 執事アルフォンスより",
+    barnum:[
+      "ご主人様、平静を装っておられますが、内心では気にかけておいでですね。",
+      "恐れながら、答えは既にお心の中に。あとは一押しをお求めのご様子。",
+      "この件、近ごろ幾度もお考えを巡らせておられましたね。",
+      "おひとりで抱えておられたのですね。お察しいたします。",
+    ],
+    core:{
+      good:[ "「${q}」── お進みください。盤面はご主人様に味方しております。","「${q}」── その答え、思いのほか近くにございます。","「${q}」── 星の巡りも、ご主人様に好意的でございます。","「${q}」── ご懸念には及びません。どうぞ手をお伸ばしを。" ],
+      hold:[ "「${q}」── 今は“据え置き”が最善かと存じます。","「${q}」── 答えはまだ霧の中。お急ぎになる必要はございません。","「${q}」── 判断材料が今ひとつ不足しております。","「${q}」── 本日はご決断を控えられてはいかがでしょう。" ],
+      bad:[  "「${q}」── 恐れながら、お止めするのが賢明かと。","「${q}」── 向かい風でございます。お進みは推奨いたしかねます。","「${q}」── 同じ轍を踏まれぬよう、進め方の再考を。","「${q}」── ひとまず、お手をお引きくださいませ。" ],
+    },
+    twist:{
+      good:[ "ただし、お動きになるなら今週中に。好機は永くは続きません。","順風のときこそ、周囲への感謝をお忘れなきよう。","浮き足立たれませんよう。足元にこそ落とし穴がございます。" ],
+      hold:[ "三日の後、再びこの珠をお振りくださいませ。","ご主人様を急かす者に、どうぞご用心を。","“分からぬ”と仰る勇気、執事は敬服いたします。" ],
+      bad:[  "されど、備えあるお方に凶は及びません。今より策を。","お止まりは敗北にあらず。次の一手のための好機かと。","つまずきもまた、学びの糧。執事はそう心得ております。" ],
+    },
+  },
+};
+
+let current = "sage";   // 選択中の占い師
+
+/* weight を考慮したランダム抽選 */
+function pickVerdict(){
+  const total = VERDICTS.reduce((s,v)=>s+v.weight,0);
+  let r = Math.random()*total;
+  for(const v of VERDICTS){ if((r-=v.weight)<0) return v; }
+  return VERDICTS[0];
+}
+const rand = arr => arr[Math.floor(Math.random()*arr.length)];
+
+/* 入力を“問い”として整える：末尾の疑問符・言い回しを軽く落とす */
+function cleanQuestion(raw){
+  let q = (raw||"").trim();
+  if(!q) return "";
+  q = q.replace(/[？?！!。、\s]+$/u,"");                 // 末尾の記号
+  q = q.replace(/(でしょうか|べきか|べき|かな|のか|ですか|かしら)$/u,""); // 婉曲な語尾
+  return q.trim();
+}
+
+/* お告げを一件生成する（選択中の占い師の口調で） */
+function divine(raw){
+  const c = CHARACTERS[current];
+  const q = cleanQuestion(raw);
+  const v = pickVerdict();
+  const qShown = q ? q : "この先の運命";
+  // ①→②→③ を、選ばれたキャラのプールから組み立て（②だけ問いの語をハイライト）
+  const l1 = rand(c.barnum);
+  const l2 = rand(c.core[v.tone]).replace("${q}", `<span class="kw">${escapeHtml(qShown)}</span>`);
+  const l3 = rand(c.twist[v.tone]);
+  const html = `${escapeHtml(l1)}<br>${l2}<br>${l3}`;
+  const shareText = `【${v.tag}】${l2.replace(/<[^>]+>/g,"")}\n${l3}\n${c.sign}｜八球オラクル`;
+  return { tag:v.tag, tone:v.tone, html, shareText, sign:c.sign };
+}
+
+/* XSS対策：入力をそのまま埋め込まない */
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* =========================================================================
+   画面まわり（球をふる → お告げを出す）
+   ========================================================================= */
+const orb = document.getElementById("orb");
+const glyph = document.getElementById("glyph");
+const halo = document.getElementById("halo");
+const verdictEl = document.getElementById("verdict");
+const tagEl = document.getElementById("tag");
+const textEl = document.getElementById("text");
+const input = document.getElementById("q");
+const shakeBtn = document.getElementById("shake");
+const logWrap = document.getElementById("logWrap");
+const logEl = document.getElementById("log");
+const byEl = document.getElementById("by");
+const castEl = document.getElementById("cast");
+
+/* 占い師チップを生成して並べる（選択で current を切り替え） */
+Object.entries(CHARACTERS).forEach(([key,c])=>{
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "chip";
+  b.setAttribute("aria-pressed", key===current ? "true" : "false");
+  b.innerHTML = `<span class="em">${c.em}</span>${c.name}`;
+  b.addEventListener("click", ()=>{
+    current = key;
+    castEl.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true");
+  });
+  castEl.appendChild(b);
+});
+
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let busy = false;
+
+/* ===== 音（Web Audio APIでその場で合成。外部ファイル不要＝CSP安全） ===== */
+let actx = null, muted = false;
+function ac(){
+  if(!actx){ const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+  if(actx.state === "suspended") actx.resume();   // クリック等のユーザー操作で解錠
+  return actx;
+}
+/* 単音（フェードイン→フェードアウトのエンベロープ付き） */
+function beep(freq, t0, dur, type="sine", peak=0.14){
+  const a = ac();
+  const osc = a.createOscillator(), g = a.createGain();
+  osc.type = type; osc.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g).connect(a.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+/* ドラムロール：短い低音を高速連打し、少しずつ大きくして緊張感を出す */
+function playRoll(sec){
+  if(muted) return;
+  const a = ac(), step = 0.05, n = Math.floor(sec/step);
+  for(let i=0;i<n;i++){ beep(150 + Math.random()*40, a.currentTime + i*step, 0.04, "triangle", 0.04 + i/n*0.08); }
+}
+/* お告げ確定音：吉は明るい和音、凶は低い和音、保留は中庸 */
+function playChime(tone){
+  if(muted) return;
+  const a = ac(), t = a.currentTime + 0.02;
+  const chords = { good:[523,659,784], hold:[440,554], bad:[294,349] };
+  (chords[tone]||chords.hold).forEach((f,i)=> beep(f, t + i*0.07, 0.7, "sine", 0.12));
+}
+/* ミュート切替 */
+const muteBtn = document.getElementById("mute");
+muteBtn.addEventListener("click", ()=>{
+  muted = !muted;
+  muteBtn.textContent = muted ? "🔇" : "🔊";
+  muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+});
+
+/* ===== 紙吹雪（吉のときだけ・Canvas） ===== */
+const confEl = document.getElementById("confetti");
+const cctx = confEl.getContext("2d");
+let confParts = [], confRAF = null, confDpr = 1;
+function sizeConfetti(){
+  confDpr = Math.min(devicePixelRatio||1, 2);
+  confEl.width = innerWidth*confDpr; confEl.height = innerHeight*confDpr;
+  confEl.style.width = innerWidth+"px"; confEl.style.height = innerHeight+"px";
+}
+sizeConfetti();
+addEventListener("resize", sizeConfetti);
+function burstConfetti(hex){
+  if(reduceMotion) return;                       // モーション控えめ設定なら出さない
+  const palette = [hex, "#a89bff", "#7b6cf6", "#eef0ff"];
+  const cx = confEl.width/2, cy = confEl.height*0.42;   // 球あたりから噴き出す
+  for(let i=0;i<90;i++){
+    const ang = Math.random()*Math.PI*2, sp = (Math.random()*6+2)*confDpr;
+    confParts.push({
+      x:cx, y:cy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp - 3*confDpr, g:0.12*confDpr,
+      w:(Math.random()*6+4)*confDpr, h:(Math.random()*4+3)*confDpr,
+      rot:Math.random()*7, vr:(Math.random()-.5)*0.3,
+      color:palette[Math.floor(Math.random()*palette.length)], life:1,
+    });
+  }
+  if(!confRAF) confRAF = requestAnimationFrame(drawConfetti);
+}
+function drawConfetti(){
+  cctx.clearRect(0,0,confEl.width,confEl.height);
+  confParts.forEach(p=>{
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life -= 0.008;
+    cctx.save(); cctx.globalAlpha = Math.max(0,p.life);
+    cctx.translate(p.x,p.y); cctx.rotate(p.rot); cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); cctx.restore();
+  });
+  confParts = confParts.filter(p=> p.life>0 && p.y < confEl.height+20);
+  if(confParts.length){ confRAF = requestAnimationFrame(drawConfetti); }
+  else { cctx.clearRect(0,0,confEl.width,confEl.height); confRAF = null; }
+}
+
+function ask(){
+  if(busy) return;
+  busy = true;
+  shakeBtn.disabled = true;
+
+  // 球を震わせ、窓を曇らせる
+  glyph.classList.add("dim");
+  glyph.textContent = "８";
+  halo.style.opacity = ".2";
+  if(!reduceMotion){ orb.classList.remove("shaking"); void orb.offsetWidth; orb.classList.add("shaking"); }
+
+  const delay = reduceMotion ? 200 : 900;
+  playRoll(delay/1000);           // ドラムロール（振っている間）
+
+  setTimeout(()=>{
+    const result = divine(input.value);
+    const hex = TONE_HEX[result.tone];   // 吉凶に応じた発色
+
+    // 窓に吉凶の文字を浮かべ、球全体をトーンの色に染める
+    glyph.textContent = result.tag.slice(0,1);
+    glyph.classList.remove("dim");
+    glyph.style.color = hex;
+    glyph.style.textShadow = `0 0 22px ${hex}`;
+    halo.style.background = `radial-gradient(circle at 50% 42%, ${hex} 0%, rgba(0,0,0,0) 62%)`;
+    halo.style.opacity = ".65";
+
+    // 演出：お告げ確定のチャイム＋（吉なら）紙吹雪
+    playChime(result.tone);
+    if(result.tone === "good") burstConfetti(hex);
+
+    // カード表示
+    tagEl.textContent = result.tag;
+    tagEl.style.setProperty("--tone", hex);
+    textEl.innerHTML = result.html;
+    byEl.textContent = result.sign;
+    verdictEl.classList.add("show");
+    verdictEl.dataset.share = result.shareText;
+
+    addLog(result.tag, cleanQuestion(input.value) || "この先の運命");
+
+    busy = false;
+    shakeBtn.disabled = false;
+  }, delay);
+}
+
+/* これまでのお告げログ（最大5件） */
+function addLog(tag, q){
+  logWrap.hidden = false;
+  const li = document.createElement("li");
+  li.innerHTML = `<span class="lt">${escapeHtml(tag)}</span><span class="lq">${escapeHtml(q)}</span>`;
+  logEl.prepend(li);
+  while(logEl.children.length > 5) logEl.lastChild.remove();
+}
+
+/* イベント配線 */
+document.getElementById("ask").addEventListener("submit", e=>{ e.preventDefault(); ask(); });
+orb.addEventListener("click", ask);
+document.getElementById("again").addEventListener("click", ()=>{ input.focus(); ask(); });
+document.getElementById("copy").addEventListener("click", async e=>{
+  try{
+    await navigator.clipboard.writeText(verdictEl.dataset.share||"");
+    e.target.textContent = "コピーしました";
+    setTimeout(()=> e.target.textContent = "お告げをコピー", 1600);
+  }catch{ e.target.textContent = "コピーできませんでした"; }
+});
+
+/* =========================================================================
+   背景の星屑（Canvas）。reduce-motion なら静止
+   ========================================================================= */
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+let stars = [], W, H, dpr;
+function resize(){
+  dpr = Math.min(devicePixelRatio||1, 2);
+  W = canvas.width = innerWidth*dpr;
+  H = canvas.height = innerHeight*dpr;
+  canvas.style.width = innerWidth+"px";
+  canvas.style.height = innerHeight+"px";
+  const n = Math.round(innerWidth*innerHeight/9000);
+  stars = Array.from({length:n}, ()=>({
+    x:Math.random()*W, y:Math.random()*H,
+    r:(Math.random()*1.3+.3)*dpr,
+    a:Math.random(), s:Math.random()*.02+.004,
+    drift:(Math.random()*.12+.02)*dpr,
+  }));
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(const st of stars){
+    st.a += st.s; const tw = .5+.5*Math.sin(st.a);   // またたき
+    ctx.globalAlpha = .15+tw*.65;
+    ctx.fillStyle = tw>.7 ? "#a89bff" : "#ffffff";
+    ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, 7); ctx.fill();
+    st.y -= st.drift; if(st.y< -2){ st.y=H+2; st.x=Math.random()*W; }
+  }
+  ctx.globalAlpha = 1;
+  if(!reduceMotion) requestAnimationFrame(draw);
+}
+resize(); draw();
+addEventListener("resize", resize);
+input.focus();
+</script>
+</body>
+</html>
