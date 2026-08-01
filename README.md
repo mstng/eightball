@@ -3,7 +3,7 @@
 問いを一つ胸に、球をふる。7人の占い師のいずれかが、口調を変えてお告げを返す
 ── 昭和のマジック8ボールを令和版にした、1ファイル完結のWebトイ。
 
-**▶ [https://eightball.vercel.app](https://eightball.vercel.app)**
+**▶ [https://eightball-rho.vercel.app](https://eightball-rho.vercel.app)**
 
 ## 特徴
 
