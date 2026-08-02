@@ -668,12 +668,39 @@ function addLog(tag, q){
 document.getElementById("ask").addEventListener("submit", e=>{ e.preventDefault(); ask(); });
 orb.addEventListener("click", ask);
 document.getElementById("again").addEventListener("click", ()=>{ input.focus(); ask(); });
-document.getElementById("copy").addEventListener("click", async e=>{
+/* コピー：iframe等でコピーAPIが塞がれることがあるため3段フォールバック */
+async function copyText(text){
+  // ① 標準のクリップボードAPI
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  // ② 旧方式（execCommand）
   try{
-    await navigator.clipboard.writeText(verdictEl.dataset.share||"");
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.setAttribute("readonly","");
+    ta.style.position="fixed"; ta.style.top="-1000px";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,text.length);
+    const ok=document.execCommand("copy"); document.body.removeChild(ta);
+    if(ok) return true;
+  }catch(e){}
+  return false;
+}
+document.getElementById("copy").addEventListener("click", async e=>{
+  const text = verdictEl.dataset.share||"";
+  const ok = await copyText(text);
+  if(ok){
     e.target.textContent = "コピーしました";
     setTimeout(()=> e.target.textContent = "お告げをコピー", 1600);
-  }catch{ e.target.textContent = "コピーできませんでした"; }
+  }else{
+    // ③ どちらも塞がれていたら、手動コピー用の欄を出す
+    let box = document.getElementById("shareBox");
+    if(!box){
+      box = document.createElement("textarea");
+      box.id = "shareBox"; box.readOnly = true;
+      box.style.cssText = "width:100%;margin-top:12px;min-height:70px;resize:vertical;background:var(--ground-2);color:var(--moon);border:1px solid var(--oracle);border-radius:10px;padding:10px;font-family:var(--sans);font-size:13px;line-height:1.6;";
+      verdictEl.appendChild(box);
+    }
+    box.value = text; box.focus(); box.select();
+    e.target.textContent = "↑を選んでコピー";
+  }
 });
 
 /* =========================================================================
