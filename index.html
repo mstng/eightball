@@ -666,6 +666,10 @@ function addLog(tag, q){
 
 /* イベント配線 */
 document.getElementById("ask").addEventListener("submit", e=>{ e.preventDefault(); ask(); });
+/* IME変換確定のEnterでフォーム送信されないようガード（変換中は keyCode 229 / isComposing） */
+input.addEventListener("keydown", e=>{
+  if(e.key==="Enter" && (e.isComposing || e.keyCode===229)) e.preventDefault();
+});
 orb.addEventListener("click", ask);
 document.getElementById("again").addEventListener("click", ()=>{ input.focus(); ask(); });
 /* コピー：iframe等でコピーAPIが塞がれることがあるため3段フォールバック */
